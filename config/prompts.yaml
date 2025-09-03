@@ -3,53 +3,194 @@
 
 # Prompt principal para extracción de datos de facturas
 invoice_extraction_prompt: |
-  Eres un experto en extracción de datos de facturas. Tu ÚNICA tarea es analizar el texto estructurado de una factura y devolver ÚNICAMENTE un objeto JSON válido.
+  Eres un experto especializado en extracción de datos de facturas de energía eléctrica. Tu especialidad es identificar y extraer información estructurada de facturas, sin importar cómo esté formateada. Tienes experiencia interpretando tablas ASCII, números, fechas, códigos de cliente y toda la información relevante para el procesamiento automático de facturas. Eres meticuloso y nunca pierdes detalles importantes.
 
-  INSTRUCCIONES CRÍTICAS:
-  1. Analiza el texto estructurado proporcionado
-  2. Identifica todos los elementos de la factura
-  3. Devuelve ÚNICAMENTE un objeto JSON válido
-  4. NO incluyas texto explicativo, comentarios o explicaciones
-  5. NO uses markdown, solo JSON puro
-  6. Si no encuentras un campo, usa null o ""
+  INSTRUCCIONES ESPECÍFICAS - BUSCA CADA CAMPO:
+
+  1. NIS COMPLETO: Si ves "NIS: 6012355 002" → extraer "6012355002" (concatenar TODOS los dígitos)
+
+  2. VALORES MONETARIOS (convertir comas):
+     - "B/. 1.549,19" → 1549.19
+     - "B/. 42,68" → 42.68
+     - "B/. 3,16" → 3.16
+
+  3. CONSUMOS Y LECTURAS:
+     - Busca kWh actuales y históricos
+     - Busca kW de demanda
+     - Busca kVARh reactiva
+     - Lecturas anterior/actual del medidor
+
+  4. CARGOS ESPECÍFICOS DE ENERGÍA:
+     - Generación: Busca "Generación" y su valor en B/.
+     - Transmisión: Busca "Transmisión" y su valor en B/.
+     - Distribución: Busca "Distribución" y su valor en B/.
+
+  5. CAMPO SECTOR:
+     - SECTOR: Busca "Sector" o campo que indica clasificación como "Residencial", "No Residencial", "Comercial", "Industrial"
+     - Si ves "No Residencial" → va en campo "sector"
+     - Si ves "Residencial" → va en campo "sector"
+
+  6. OTROS DETALLES IMPORTANTES:
+     - Variación por Combustible: Busca "Combustible" y valor
+     - Compensación por Incumplimiento: Busca "Compensación" o "Incumplimiento"
+     - Demandas por tipo (Punta, Fuera Punta, etc.)
+     - Energía por franjas horarias
+
+  7. HISTÓRICO COMPLETO:
+     - Extrae TODOS los meses mostrados con kWh e importes
+     - No omitas ningún mes que aparezca en la tabla
+
+  8. ⚠️ TOTALES - DIFERENCIA CRÍTICA:
+     - "TOTAL ESTE MES" o "Total Este Mes": Es el total SOLO de este período de facturación
+     - "GRAN TOTAL" o "Gran Total": Es el total INCLUYENDO saldos pendientes anteriores
+     - Busca específicamente cada campo en su ubicación en la factura
+     - Extrae el valor que aparece junto a "TOTAL ESTE MES" para "total_mes"
+     - Extrae el valor que aparece junto a "GRAN TOTAL" para "gran_total"
+     - Si ambos campos muestran el mismo valor en la factura, está bien que coincidan
+     - AMBOS campos SIEMPRE deben estar presentes y extraídos correctamente
+
+  REGLAS CRÍTICAS:
+  - SI VES UN VALOR EN LA FACTURA, EXTRÁELO (no pongas 0)
+  - Convierte correctamente las comas decimales y de miles
+  - Busca valores en TODA la factura, no solo en una sección
+  - Extrae cada campo desde su ubicación específica, no copies valores entre campos
 
   FORMATO DE SALIDA OBLIGATORIO:
   Debes devolver ÚNICAMENTE este JSON (sin texto adicional):
 
-  EJEMPLO DE ESTRUCTURA:
   {
-    "invoice_info": {
-      "invoice_number": "FAC-001",
-      "date": "2024-01-15",
-      "due_date": "2024-02-15"
+    "informacion_cliente": {
+      "nombre_cliente": "",
+      "direccion": "",
+      "ciudad": "",
+      "nis": "",
+      "contrato": "",
+      "ruta": ""
     },
-    "vendor_info": {
-      "name": "Empresa ABC",
-      "address": "Calle 123, Ciudad",
-      "tax_id": "12345678-9"
+    "datos_factura": {
+      "numero_factura": "",
+      "mes_factura": "",
+      "fecha_emision": "",
+      "fecha_vencimiento": "",
+      "fecha_corte": "",
+      "medidor": "",
+      "sector": "",
+      "tipo_lectura": ""
     },
-    "customer_info": {
-      "name": "Cliente XYZ",
-      "address": "Avenida 456, Ciudad"
+    "periodo_lectura": {
+      "fecha_desde": "",
+      "fecha_hasta": "",
+      "dias": 0,
+      "tarifa": ""
     },
-    "products": [
+    "lecturas_medidor": {
+      "energia_activa": {
+        "lectura_anterior": 0,
+        "lectura_actual": 0,
+        "consumo": 0
+      },
+      "energia_reactiva": {
+        "consumo": 0
+      },
+      "demanda": {
+        "lectura_actual": 0
+      }
+    },
+    "cargos_energia": {
+      "generacion": 0,
+      "transmision": 0,
+      "distribucion": 0,
+      "var_combustible": 0,
+      "var_transmision": 0,
+      "var_generacion": 0
+    },
+    "conceptos_facturacion": [
       {
-        "description": "Producto 1",
-        "quantity": 2,
-        "unit_price": 100.00,
-        "total": 200.00
+        "concepto": "Cargo Fijo",
+        "importe": 0
+      },
+      {
+        "concepto": "Energía",
+        "importe": 0
+      },
+      {
+        "concepto": "Interés por mora",
+        "importe": 0
+      },
+      {
+        "concepto": "Subsidio Ley 15 (Recargo)",
+        "importe": 0
+      },
+      {
+        "concepto": "Variación por Combustible",
+        "importe": 0
+      },
+      {
+        "concepto": "Compensación por Incumplimiento",
+        "importe": 0
       }
     ],
-    "totals": {
-      "subtotal": 200.00,
-      "tax": 38.00,
-      "total": 238.00
+    "historico_consumo": [],
+    "demandas_detalladas": {
+      "demanda_maxima": 0,
+      "demanda_punta": 0,
+      "demanda_fuera_punta": 0,
+      "demanda_generacion": 0
+    },
+    "energia_por_franjas": {
+      "energia_punta": 0,
+      "energia_fuera_punta": 0,
+      "energia_llano": 0
+    },
+    "totales": {
+      "total_mes": 0,
+      "gran_total": 0,
+      "saldo_anterior": 0,
+      "saldo_corte": 0
+    },
+    "resumen_tabular": {
+      "numero_factura": "",
+      "nis": "",
+      "mes_factura": "",
+      "tarifa": "",
+      "periodo_lectura_desde": "",
+      "periodo_lectura_hasta": "",
+      "tipo_lectura": "",
+      "sector": "",
+      "total_mes": 0,
+      "gran_total": 0,
+      "historico_consumo_kwh": 0,
+      "historico_consumo_kw": 0,
+      "reactiva_kvarh": 0,
+      "demanda_media_f": 0,
+      "interes_por_mora": 0,
+      "subsidio_ley_15_recargo": 0,
+      "compensacion_por_incumplimiento": 0,
+      "cargo_fijo": 0,
+      "energia": 0,
+      "demanda_maxima": 0,
+      "deman_max_gen": 0,
+      "demanda_max_punta": 0,
+      "demanda_baja_f_punta": 0,
+      "energia_punta": 0,
+      "energia_f_punta": 0,
+      "energia_llano": 0,
+      "var_combustible": 0,
+      "var_transmision": 0,
+      "var_generacion": 0,
+      "detalle_energia": [],
+      "otros_detalles_factura": {
+        "generacion_kwh": 0,
+        "transmision_kwh": 0,
+        "distribucion_kwh": 0,
+        "compensaciones": 0,
+        "ajustes": 0,
+        "descuentos": 0
+      }
     }
   }
 
-  Si no puedes identificar algún campo, usa null o "".
-
-  IMPORTANTE: Tu respuesta debe ser ÚNICAMENTE el objeto JSON, sin texto adicional, sin explicaciones, sin markdown. Solo JSON puro.
+  IMPORTANTE: Busca valores específicos en la factura para CADA campo. Si ves números o importes, extráelos correctamente. Tu respuesta debe ser ÚNICAMENTE el objeto JSON, sin texto adicional, sin explicaciones, sin markdown. Solo JSON puro.
 
 # Prompt para validación de datos extraídos
 validation_prompt: |
@@ -80,6 +221,11 @@ models:
 llmwhisperer:
   mode: "table"
   output_mode: "layout_preserving"
-  wait_timeout: 120
+  wait_timeout: 60
   mark_vertical_lines: true
   mark_horizontal_lines: true
+
+# Configuración de procesamiento paralelo
+parallel_processing:
+  max_workers: 3
+  chunk_size: 5

@@ -14,6 +14,8 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional, Union
 import pandas as pd
 import yaml
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import time
 
 from ..clients.openai_client import init_chat_model, chat_with_system_prompt
 from ..clients.llmwhisperer_client import init_llmwhisperer_client, convert_pdf_to_text
@@ -25,16 +27,22 @@ logger = logging.getLogger(__name__)
 class PDFProcessor:
     """Procesador principal de PDFs a Excel."""
     
-    def __init__(self, config_path: str = "config/prompts.yaml"):
+    def __init__(self, config_path: str = "config/prompts.yaml", max_workers: int = None):
         """
         Inicializa el procesador.
         
         Args:
             config_path: Ruta al archivo de configuración YAML
+            max_workers: Número máximo de hilos para procesamiento paralelo (opcional)
         """
         self.config = self._load_config(config_path)
         self.llmwhisperer_client = None
         self.openai_client = None
+        
+        # Usar configuración del archivo YAML o valor por defecto
+        parallel_config = self.config.get("parallel_processing", {})
+        self.max_workers = max_workers or parallel_config.get("max_workers", 3)
+        
         self._initialize_clients()
     
     def _load_config(self, config_path: str) -> Dict[str, Any]:
@@ -117,7 +125,7 @@ class PDFProcessor:
     
     def process_multiple_pdfs(self, pdf_paths: List[Union[str, Path]]) -> List[Dict[str, Any]]:
         """
-        Procesa múltiples PDFs.
+        Procesa múltiples PDFs en paralelo para mayor velocidad.
         
         Args:
             pdf_paths: Lista de rutas a archivos PDF
@@ -125,19 +133,74 @@ class PDFProcessor:
         Returns:
             list: Lista de datos extraídos
         """
-        results = []
         total_pdfs = len(pdf_paths)
+        results = []
         
-        logger.info(f"🔄 Procesando {total_pdfs} PDFs...")
+        logger.info(f"🚀 Procesando {total_pdfs} PDFs en paralelo (max {self.max_workers} hilos)...")
+        start_time = time.time()
         
-        for i, pdf_path in enumerate(pdf_paths, 1):
-            logger.info(f"📄 Procesando PDF {i}/{total_pdfs}: {Path(pdf_path).name}")
-            result = self.process_single_pdf(pdf_path)
-            if result:
-                results.append(result)
+        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+            # Enviar todas las tareas al pool de hilos
+            future_to_pdf = {
+                executor.submit(self.process_single_pdf, pdf_path): pdf_path 
+                for pdf_path in pdf_paths
+            }
+            
+            # Procesar resultados conforme se completan
+            completed = 0
+            for future in as_completed(future_to_pdf):
+                pdf_path = future_to_pdf[future]
+                completed += 1
+                
+                try:
+                    result = future.result()
+                    if result:
+                        results.append(result)
+                        logger.info(f"✅ PDF {completed}/{total_pdfs} completado: {Path(pdf_path).name}")
+                    else:
+                        logger.warning(f"⚠️ PDF {completed}/{total_pdfs} falló: {Path(pdf_path).name}")
+                except Exception as e:
+                    logger.error(f"❌ Error procesando PDF {completed}/{total_pdfs} {Path(pdf_path).name}: {str(e)}")
         
-        logger.info(f"✅ Procesamiento completado: {len(results)}/{total_pdfs} PDFs exitosos")
+        end_time = time.time()
+        processing_time = end_time - start_time
+        
+        logger.info(f"🎉 Procesamiento paralelo completado: {len(results)}/{total_pdfs} PDFs exitosos")
+        logger.info(f"⏱️ Tiempo total: {processing_time:.2f} segundos ({processing_time/total_pdfs:.2f}s por PDF)")
+        
         return results
+    
+    def process_multiple_pdfs_in_chunks(self, pdf_paths: List[Union[str, Path]]) -> List[Dict[str, Any]]:
+        """
+        Procesa múltiples PDFs en chunks para optimizar memoria.
+        
+        Args:
+            pdf_paths: Lista de rutas a archivos PDF
+            
+        Returns:
+            list: Lista de datos extraídos
+        """
+        total_pdfs = len(pdf_paths)
+        chunk_size = self.config.get("parallel_processing", {}).get("chunk_size", 5)
+        
+        logger.info(f"📦 Procesando {total_pdfs} PDFs en chunks de {chunk_size}...")
+        
+        all_results = []
+        total_chunks = (total_pdfs + chunk_size - 1) // chunk_size
+        
+        for i in range(0, total_pdfs, chunk_size):
+            chunk = pdf_paths[i:i + chunk_size]
+            chunk_num = (i // chunk_size) + 1
+            
+            logger.info(f"🔄 Procesando chunk {chunk_num}/{total_chunks} ({len(chunk)} PDFs)...")
+            
+            chunk_results = self.process_multiple_pdfs(chunk)
+            all_results.extend(chunk_results)
+            
+            logger.info(f"✅ Chunk {chunk_num}/{total_chunks} completado: {len(chunk_results)}/{len(chunk)} exitosos")
+        
+        logger.info(f"🎉 Procesamiento por chunks completado: {len(all_results)}/{total_pdfs} PDFs exitosos")
+        return all_results
     
     def _extract_data_with_openai(self, structured_text: str, prompt: str) -> Optional[Dict[str, Any]]:
         """
@@ -187,35 +250,66 @@ class PDFProcessor:
                 summary_data = []
                 for data in processed_data:
                     if "extracted_data" in data and isinstance(data["extracted_data"], dict):
-                        invoice_info = data["extracted_data"].get("invoice_info", {})
+                        # Usar la nueva estructura del prompt mejorado
+                        datos_factura = data["extracted_data"].get("datos_factura", {})
+                        totales = data["extracted_data"].get("totales", {})
+                        resumen_tabular = data["extracted_data"].get("resumen_tabular", {})
+                        
                         summary_data.append({
                             "Archivo": data["file_name"],
-                            "Número de Factura": invoice_info.get("invoice_number", "N/A"),
-                            "Fecha": invoice_info.get("date", "N/A"),
-                            "Total": invoice_info.get("total", "N/A")
+                            "Número de Factura": datos_factura.get("numero_factura") or resumen_tabular.get("numero_factura", "N/A"),
+                            "Fecha": datos_factura.get("fecha_emision", "N/A"),
+                            "Total": totales.get("gran_total") or resumen_tabular.get("gran_total", "N/A")
                         })
                 
                 if summary_data:
                     summary_df = pd.DataFrame(summary_data)
                     summary_df.to_excel(writer, sheet_name="Resumen", index=False)
                 
-                # Hoja de productos
-                products_data = []
+                # Hoja detallada con resumen tabular
+                detailed_data = []
                 for data in processed_data:
                     if "extracted_data" in data and isinstance(data["extracted_data"], dict):
-                        products = data["extracted_data"].get("products", [])
-                        for product in products:
-                            products_data.append({
+                        resumen_tabular = data["extracted_data"].get("resumen_tabular", {})
+                        if resumen_tabular:
+                            detailed_data.append({
                                 "Archivo": data["file_name"],
-                                "Descripción": product.get("description", "N/A"),
-                                "Cantidad": product.get("quantity", "N/A"),
-                                "Precio Unitario": product.get("unit_price", "N/A"),
-                                "Total": product.get("total", "N/A")
+                                "Número de Factura": resumen_tabular.get("numero_factura", ""),
+                                "NIS": resumen_tabular.get("nis", ""),
+                                "Mes de la Factura": resumen_tabular.get("mes_factura", ""),
+                                "Tarifa": resumen_tabular.get("tarifa", ""),
+                                "Sector": resumen_tabular.get("sector", ""),
+                                "Total del Mes": resumen_tabular.get("total_mes", 0),
+                                "Gran Total": resumen_tabular.get("gran_total", 0),
+                                "Consumo kWh": resumen_tabular.get("historico_consumo_kwh", 0),
+                                "Cargo Fijo": resumen_tabular.get("cargo_fijo", 0),
+                                "Energía": resumen_tabular.get("energia", 0),
+                                "Interés por Mora": resumen_tabular.get("interes_por_mora", 0),
+                                "Subsidio Ley 15": resumen_tabular.get("subsidio_ley_15_recargo", 0),
+                                "Var. Combustible": resumen_tabular.get("var_combustible", 0),
+                                "Var. Transmisión": resumen_tabular.get("var_transmision", 0),
+                                "Var. Generación": resumen_tabular.get("var_generacion", 0)
                             })
                 
-                if products_data:
-                    products_df = pd.DataFrame(products_data)
-                    products_df.to_excel(writer, sheet_name="Productos", index=False)
+                if detailed_data:
+                    detailed_df = pd.DataFrame(detailed_data)
+                    detailed_df.to_excel(writer, sheet_name="Detalle_Completo", index=False)
+                
+                # Hoja de conceptos de facturación
+                concepts_data = []
+                for data in processed_data:
+                    if "extracted_data" in data and isinstance(data["extracted_data"], dict):
+                        conceptos = data["extracted_data"].get("conceptos_facturacion", [])
+                        for concepto in conceptos:
+                            concepts_data.append({
+                                "Archivo": data["file_name"],
+                                "Concepto": concepto.get("concepto", "N/A"),
+                                "Importe": concepto.get("importe", 0)
+                            })
+                
+                if concepts_data:
+                    concepts_df = pd.DataFrame(concepts_data)
+                    concepts_df.to_excel(writer, sheet_name="Conceptos", index=False)
             
             logger.info(f"✅ Archivo Excel creado: {output_path}")
             return True

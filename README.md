@@ -1,12 +1,13 @@
 # 📄 PDF Invoice to Excel
 
-Una aplicación web construida con Streamlit que convierte PDFs de facturas a archivos Excel usando inteligencia artificial.
+Una aplicación web construida con Streamlit que convierte PDFs de facturas de energía eléctrica a archivos Excel usando inteligencia artificial.
 
 ## 🚀 Características
 
-- **Conversión de PDFs**: Procesa archivos PDF individuales o en lote
+- **Conversión de PDFs**: Procesa archivos PDF individuales o en lote (hasta 20+ archivos)
 - **Extracción Inteligente**: Usa LLMWhisperer para convertir PDFs a texto estructurado
-- **Procesamiento con IA**: Utiliza OpenAI para extraer datos estructurados
+- **Procesamiento con IA**: Utiliza OpenAI GPT-4o-mini para extraer datos estructurados
+- **Procesamiento Paralelo**: Optimizado para velocidad con procesamiento simultáneo
 - **Generación de Excel**: Crea archivos Excel organizados con múltiples hojas
 - **Interfaz Web**: Aplicación fácil de usar con Streamlit
 
@@ -103,17 +104,19 @@ pdf-invoice-to-excel/
 
 ## 🎯 Funcionalidades
 
-### Extracción de Datos
-- Información de la factura (número, fecha, vencimiento)
-- Datos del emisor/vendedor
-- Datos del cliente/comprador
-- Lista de productos/servicios
-- Totales y cálculos
-- Información de pago
+### Extracción de Datos (Facturas de Energía)
+- **Información del Cliente**: NIS, nombre, dirección, sector
+- **Datos de la Factura**: número, fecha, vencimiento, medidor
+- **Lecturas del Medidor**: consumo actual, anterior, demanda
+- **Cargos de Energía**: generación, transmisión, distribución
+- **Conceptos de Facturación**: cargo fijo, energía, intereses, subsidios
+- **Histórico de Consumo**: consumo por meses anteriores
+- **Totales**: total del mes, gran total, saldos
 
 ### Generación de Excel
 - **Hoja Resumen**: Información general de todas las facturas
-- **Hoja Productos**: Lista detallada de productos
+- **Hoja Detalle Completo**: Todos los campos extraídos estructurados
+- **Hoja Conceptos**: Desglose de conceptos de facturación
 - **Formato Organizado**: Datos estructurados y fáciles de analizar
 
 ## 🐛 Solución de Problemas

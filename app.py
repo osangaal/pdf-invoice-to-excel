@@ -190,17 +190,31 @@ LLMWHISPERER_API_KEY=tu_api_key
                 try:
                     processor = PDFProcessor()
                     
-                    # Procesar archivos
-                    results = []
+                    # Procesar archivos con optimización
                     total_files = len(saved_files)
                     
-                    for i, file_path in enumerate(saved_files):
-                        status_text.text(f"Procesando {file_path.name}...")
-                        progress_bar.progress((i + 1) / total_files)
+                    if total_files == 1:
+                        # Un solo archivo - procesamiento normal
+                        status_text.text(f"Procesando {saved_files[0].name}...")
+                        progress_bar.progress(0.5)
                         
-                        result = processor.process_single_pdf(file_path)
-                        if result:
-                            results.append(result)
+                        result = processor.process_single_pdf(saved_files[0])
+                        results = [result] if result else []
+                        
+                        progress_bar.progress(1.0)
+                    else:
+                        # Múltiples archivos - procesamiento paralelo optimizado
+                        status_text.text(f"🚀 Procesando {total_files} PDFs en paralelo...")
+                        progress_bar.progress(0.1)
+                        
+                        if total_files <= 5:
+                            # Pocos archivos - procesamiento paralelo directo
+                            results = processor.process_multiple_pdfs(saved_files)
+                        else:
+                            # Muchos archivos - procesamiento por chunks
+                            results = processor.process_multiple_pdfs_in_chunks(saved_files)
+                        
+                        progress_bar.progress(1.0)
                     
                     if results:
                         # Crear archivo Excel

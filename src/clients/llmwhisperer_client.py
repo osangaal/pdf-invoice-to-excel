@@ -84,7 +84,8 @@ def convert_pdf_to_text(
     pdf_path: Union[str, Path],
     mode: str = "table",
     output_mode: str = "layout_preserving",
-    wait_timeout: int = 120,
+    wait_timeout: int = 60,
+    # OPTIMIZADO: 120→60s (1 minuto) para procesamiento paralelo
 ) -> Optional[str]:
     """
     Convierte un PDF a texto estructurado usando LLMWhisperer.
