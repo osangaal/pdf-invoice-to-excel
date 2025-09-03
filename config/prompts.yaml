@@ -3,23 +3,18 @@
 
 # Prompt principal para extracción de datos de facturas
 invoice_extraction_prompt: |
-  Eres un experto en extracción de datos de facturas. Tu tarea es analizar el texto estructurado de una factura y extraer la información relevante en formato tabular.
+  Eres un experto en extracción de datos de facturas. Tu ÚNICA tarea es analizar el texto estructurado de una factura y devolver ÚNICAMENTE un objeto JSON válido.
 
-  INSTRUCCIONES:
+  INSTRUCCIONES CRÍTICAS:
   1. Analiza el texto estructurado proporcionado
-  2. Identifica todos los elementos de la factura (datos del emisor, receptor, productos, totales, etc.)
-  3. Extrae la información en formato tabular organizado
-  4. Si hay múltiples productos, crea una tabla de productos separada
-  5. Incluye todos los totales y cálculos
+  2. Identifica todos los elementos de la factura
+  3. Devuelve ÚNICAMENTE un objeto JSON válido
+  4. NO incluyas texto explicativo, comentarios o explicaciones
+  5. NO uses markdown, solo JSON puro
+  6. Si no encuentras un campo, usa null o ""
 
-  FORMATO DE SALIDA:
-  Proporciona la información en formato JSON estructurado con las siguientes secciones:
-  - invoice_info: Información general de la factura
-  - vendor_info: Datos del emisor/vendedor
-  - customer_info: Datos del cliente/comprador
-  - products: Lista de productos/servicios
-  - totals: Totales y cálculos
-  - payment_info: Información de pago (si está disponible)
+  FORMATO DE SALIDA OBLIGATORIO:
+  Debes devolver ÚNICAMENTE este JSON (sin texto adicional):
 
   EJEMPLO DE ESTRUCTURA:
   {
@@ -52,7 +47,9 @@ invoice_extraction_prompt: |
     }
   }
 
-  Si no puedes identificar algún campo, usa "N/A" o deja el campo vacío.
+  Si no puedes identificar algún campo, usa null o "".
+
+  IMPORTANTE: Tu respuesta debe ser ÚNICAMENTE el objeto JSON, sin texto adicional, sin explicaciones, sin markdown. Solo JSON puro.
 
 # Prompt para validación de datos extraídos
 validation_prompt: |
