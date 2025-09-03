@@ -1,0 +1,9 @@
+# Paquetes del sistema para Streamlit Cloud
+# Estos paquetes se instalan a nivel del sistema operativo
+
+# Para procesamiento de PDFs
+poppler-utils
+
+# Para manejo de archivos
+unzip
+zip

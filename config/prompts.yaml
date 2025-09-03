@@ -1,0 +1,88 @@
+# Configuración de prompts para la extracción de datos
+# ===================================================
+
+# Prompt principal para extracción de datos de facturas
+invoice_extraction_prompt: |
+  Eres un experto en extracción de datos de facturas. Tu tarea es analizar el texto estructurado de una factura y extraer la información relevante en formato tabular.
+
+  INSTRUCCIONES:
+  1. Analiza el texto estructurado proporcionado
+  2. Identifica todos los elementos de la factura (datos del emisor, receptor, productos, totales, etc.)
+  3. Extrae la información en formato tabular organizado
+  4. Si hay múltiples productos, crea una tabla de productos separada
+  5. Incluye todos los totales y cálculos
+
+  FORMATO DE SALIDA:
+  Proporciona la información en formato JSON estructurado con las siguientes secciones:
+  - invoice_info: Información general de la factura
+  - vendor_info: Datos del emisor/vendedor
+  - customer_info: Datos del cliente/comprador
+  - products: Lista de productos/servicios
+  - totals: Totales y cálculos
+  - payment_info: Información de pago (si está disponible)
+
+  EJEMPLO DE ESTRUCTURA:
+  {
+    "invoice_info": {
+      "invoice_number": "FAC-001",
+      "date": "2024-01-15",
+      "due_date": "2024-02-15"
+    },
+    "vendor_info": {
+      "name": "Empresa ABC",
+      "address": "Calle 123, Ciudad",
+      "tax_id": "12345678-9"
+    },
+    "customer_info": {
+      "name": "Cliente XYZ",
+      "address": "Avenida 456, Ciudad"
+    },
+    "products": [
+      {
+        "description": "Producto 1",
+        "quantity": 2,
+        "unit_price": 100.00,
+        "total": 200.00
+      }
+    ],
+    "totals": {
+      "subtotal": 200.00,
+      "tax": 38.00,
+      "total": 238.00
+    }
+  }
+
+  Si no puedes identificar algún campo, usa "N/A" o deja el campo vacío.
+
+# Prompt para validación de datos extraídos
+validation_prompt: |
+  Eres un validador de datos de facturas. Revisa la información extraída y asegúrate de que:
+  1. Todos los números sean consistentes
+  2. Los cálculos sean correctos
+  3. Los campos obligatorios estén presentes
+  4. El formato sea válido
+
+  Si encuentras errores, corrígelos y proporciona la versión corregida.
+
+# Prompt para conversión a Excel
+excel_format_prompt: |
+  Convierte la información de la factura en formato tabular para Excel. Crea las siguientes hojas:
+  1. "Resumen": Información general de la factura
+  2. "Productos": Lista detallada de productos/servicios
+  3. "Totales": Cálculos y totales
+
+  Usa formato CSV para cada hoja, separado por comas.
+
+# Configuración de modelos
+models:
+  default_model: "gpt-4o-mini"
+  temperature: 0.0
+  max_tokens: 4000
+
+# Configuración de LLMWhisperer
+llmwhisperer:
+  mode: "table"
+  output_mode: "layout_preserving"
+  wait_timeout: 120
+  mark_vertical_lines: true
+  mark_horizontal_lines: true
